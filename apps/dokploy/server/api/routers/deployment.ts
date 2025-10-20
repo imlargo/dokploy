@@ -98,9 +98,27 @@ export const deploymentRouter = createTRPCRouter({
 				});
 			}
 
+			// Determine the serverId based on deployment type
+			let serverId: string | null = null;
+
+			if (deployment.schedule) {
+				// For schedules, check the schedule type
+				if (deployment.schedule.serverId) {
+					serverId = deployment.schedule.serverId;
+				} else if (deployment.schedule.application?.serverId) {
+					serverId = deployment.schedule.application.serverId;
+				} else if (deployment.schedule.compose?.serverId) {
+					serverId = deployment.schedule.compose.serverId;
+				}
+			} else if (deployment.application?.serverId) {
+				serverId = deployment.application.serverId;
+			} else if (deployment.compose?.serverId) {
+				serverId = deployment.compose.serverId;
+			}
+
 			const command = `kill -9 ${deployment.pid}`;
-			if (deployment.schedule?.serverId) {
-				await execAsyncRemote(deployment.schedule.serverId, command);
+			if (serverId) {
+				await execAsyncRemote(serverId, command);
 			} else {
 				await execAsync(command);
 			}
