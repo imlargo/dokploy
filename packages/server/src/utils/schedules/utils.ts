@@ -68,12 +68,26 @@ export const runCommand = async (scheduleId: string) => {
 					`
 					set -e
 					echo "Running command: docker exec ${containerId} ${shellType} -c '${command}'" >> ${deployment.logPath};
-					docker exec ${containerId} ${shellType} -c '${command}' >> ${deployment.logPath} 2>> ${deployment.logPath} || { 
+					docker exec ${containerId} ${shellType} -c '${command}' >> ${deployment.logPath} 2>> ${deployment.logPath} & 
+					PID=$!
+					# Echo to stdout for callback capture and to log file for record keeping
+					echo "PID: $PID | Schedule ID: ${scheduleId}"
+					echo "PID: $PID | Schedule ID: ${scheduleId}" >> ${deployment.logPath}
+					wait $PID || { 
 						echo "❌ Command failed" >> ${deployment.logPath};
 						exit 1;
 					}
 					echo "✅ Command executed successfully" >> ${deployment.logPath};
 					`,
+					async (data) => {
+						// Extract the PID from the data
+						const pid = data?.match(/PID: (\d+)/)?.[1];
+						if (pid) {
+							await updateDeployment(deployment.deploymentId, {
+								pid,
+							});
+						}
+					},
 				);
 			} catch (error) {
 				await updateDeploymentStatus(deployment.deploymentId, "error");
@@ -86,7 +100,7 @@ export const runCommand = async (scheduleId: string) => {
 				writeStream.write(
 					`docker exec ${containerId} ${shellType} -c ${command}\n`,
 				);
-				await spawnAsync(
+				const result = spawnAsync(
 					"docker",
 					["exec", containerId, shellType, "-c", command],
 					(data) => {
@@ -95,6 +109,15 @@ export const runCommand = async (scheduleId: string) => {
 						}
 					},
 				);
+
+				// Store the PID immediately
+				if (result.child.pid) {
+					await updateDeployment(deployment.deploymentId, {
+						pid: result.child.pid.toString(),
+					});
+				}
+
+				await result;
 
 				writeStream.write("✅ Command executed successfully\n");
 			} catch (error) {
