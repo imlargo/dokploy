@@ -70,6 +70,7 @@ export const runCommand = async (scheduleId: string) => {
 					echo "Running command: docker exec ${containerId} ${shellType} -c '${command}'" >> ${deployment.logPath};
 					docker exec ${containerId} ${shellType} -c '${command}' >> ${deployment.logPath} 2>> ${deployment.logPath} & 
 					PID=$!
+					echo "PID: $PID | Schedule ID: ${scheduleId}"
 					echo "PID: $PID | Schedule ID: ${scheduleId}" >> ${deployment.logPath}
 					wait $PID || { 
 						echo "❌ Command failed" >> ${deployment.logPath};
